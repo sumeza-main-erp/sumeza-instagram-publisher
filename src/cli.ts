@@ -6,7 +6,7 @@
 // Not a service — just a way to confirm the publish flow actually works
 // against the real account before wiring it into anything scheduled.
 
-import { publishImagePost, publishReel, checkPublishingQuota } from "./publish.js";
+import { publishImagePost, publishReel, publishCarousel, checkPublishingQuota } from "./publish.js";
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -36,13 +36,25 @@ async function main() {
     return;
   }
 
+  if (cmd === "carousel") {
+    // --images takes a comma-separated list of 2-10 publicly reachable image URLs, in slide order.
+    const imagesArg = arg("images");
+    const caption = arg("caption");
+    if (!imagesArg) throw new Error('Usage: carousel --images "url1,url2,..." [--caption "text"]');
+    const imageUrls = imagesArg.split(",").map((u) => u.trim()).filter(Boolean);
+    console.log(`Publishing a ${imageUrls.length}-image carousel...`);
+    const result = await publishCarousel({ imageUrls, caption });
+    console.log("Published:", result);
+    return;
+  }
+
   if (cmd === "quota") {
     const quota = await checkPublishingQuota();
     console.log("Publishing quota:", quota);
     return;
   }
 
-  console.error("Usage: node dist/cli.js <post|reel|quota> [options]");
+  console.error("Usage: node dist/cli.js <post|reel|carousel|quota> [options]");
   process.exit(1);
 }
 

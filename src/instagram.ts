@@ -75,6 +75,29 @@ export async function createReelContainer(igUserId: string, token: string, opts:
   return body.id;
 }
 
+/** Step 1a of publishing a carousel: one child item. No caption on children — the caption goes on the parent carousel container. */
+export async function createCarouselItemContainer(igUserId: string, token: string, opts: { imageUrl: string }): Promise<string> {
+  const body = (await call(`/${igUserId}/media`, token, {
+    method: "POST",
+    params: { image_url: opts.imageUrl, is_carousel_item: "true" },
+  })) as { id?: string };
+  if (!body.id) throw new Error("Instagram did not return a container id for the carousel item");
+  return body.id;
+}
+
+/** Step 1b of publishing a carousel: the parent container referencing 2-10 already-created child item containers. */
+export async function createCarouselContainer(igUserId: string, token: string, opts: { childIds: string[]; caption?: string }): Promise<string> {
+  if (opts.childIds.length < 2 || opts.childIds.length > 10) {
+    throw new Error(`A carousel needs 2-10 items, got ${opts.childIds.length}`);
+  }
+  const body = (await call(`/${igUserId}/media`, token, {
+    method: "POST",
+    params: { media_type: "CAROUSEL", children: opts.childIds.join(","), caption: opts.caption },
+  })) as { id?: string };
+  if (!body.id) throw new Error("Instagram did not return a container id for the carousel");
+  return body.id;
+}
+
 /** Current processing status of a media container. */
 export async function getContainerStatus(containerId: string, token: string): Promise<ContainerStatus> {
   const body = (await call(`/${containerId}`, token, { params: { fields: "status_code" } })) as { status_code?: string };

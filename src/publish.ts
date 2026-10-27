@@ -3,7 +3,7 @@
 // (a scheduled task, a small HTTP handler, the CLI below) should call.
 
 import { getInstagramToken } from "./secrets.js";
-import { createImageContainer, createReelContainer, publishContainer, waitForContainer, getPublishingLimit } from "./instagram.js";
+import { createImageContainer, createReelContainer, createCarouselItemContainer, createCarouselContainer, publishContainer, waitForContainer, getPublishingLimit } from "./instagram.js";
 
 function requireEnv(name: string): string {
   const v = process.env[name]?.trim();
@@ -30,6 +30,26 @@ export async function publishReel(opts: { videoUrl: string; caption?: string }):
   const containerId = await createReelContainer(igUserId, token, opts);
   // Video processing is slower and less predictable than an image container.
   await waitForContainer(containerId, token, { timeoutMs: 5 * 60 * 1000, intervalMs: 5_000 });
+  const mediaId = await publishContainer(igUserId, containerId, token);
+  return { mediaId, containerId };
+}
+
+/** Publish a carousel (2-10 images). Each image is created as a carousel-item container first, then wrapped in a parent carousel container carrying the one caption. */
+export async function publishCarousel(opts: { imageUrls: string[]; caption?: string }): Promise<PublishResult> {
+  const token = await getInstagramToken();
+  const igUserId = requireEnv("IG_BUSINESS_ACCOUNT_ID");
+  const childIds: string[] = [];
+  for (const imageUrl of opts.imageUrls) {
+    const id = await createCarouselItemContainer(igUserId, token, { imageUrl });
+    childIds.push(id);
+  }
+  // Child items don't need to each reach FINISHED before building the parent container, but waiting
+  // avoids a race where the parent container is created before Meta has fetched every image.
+  for (const id of childIds) {
+    await waitForContainer(id, token, { timeoutMs: 60_000 });
+  }
+  const containerId = await createCarouselContainer(igUserId, token, { childIds, caption: opts.caption });
+  await waitForContainer(containerId, token, { timeoutMs: 60_000 });
   const mediaId = await publishContainer(igUserId, containerId, token);
   return { mediaId, containerId };
 }
